@@ -73,6 +73,14 @@ const parseNumeric = (value) => {
   return Number(value);
 };
 
+const getWorksheetCellHyperlink = (worksheet, rowIndex, colIndex) => {
+  if (colIndex < 0) return '';
+  const cellAddress = XLSX.utils.encode_cell({ r: rowIndex, c: colIndex });
+  const cell = worksheet[cellAddress];
+  const target = cell?.l?.Target || cell?.l?.target;
+  return target ? String(target) : '';
+};
+
 const formatDateOnly = (value) =>
   new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).format(
     new Date(value)
@@ -301,12 +309,17 @@ const buildChart = (rows, columns) => {
     seriesBKey,
     seriesAStyle,
     seriesBStyle,
-    seriesFormats
+    seriesFormats,
+    worksheet,
+    headers
   } = columns;
   currentMeta = { seriesFormats, seriesAKey, seriesBKey };
 
+  const eventColIndex = eventKey ? headers.indexOf(eventKey) : -1;
+  const commentColIndex = commentKey ? headers.indexOf(commentKey) : -1;
+
   const points = rows
-    .map((row) => {
+    .map((row, dataIndex) => {
       const date = parseDate(row[dateKey]);
       const seriesAValue = parseNumeric(row[seriesAKey]);
       const seriesBValue = seriesBKey ? parseNumeric(row[seriesBKey]) : NaN;
@@ -316,14 +329,23 @@ const buildChart = (rows, columns) => {
       const event = eventKey && row[eventKey] ? String(row[eventKey]).trim() : '';
       const comment = commentKey && row[commentKey] ? String(row[commentKey]).trim() : '';
 
+      // `sheet_to_json` strips cell hyperlink metadata; recover hyperlink targets directly from worksheet cells.
+      const worksheetRowIndex = dataIndex + 1;
+      const eventCellLink = getWorksheetCellHyperlink(worksheet, worksheetRowIndex, eventColIndex);
+      const commentCellLink = getWorksheetCellHyperlink(
+        worksheet,
+        worksheetRowIndex,
+        commentColIndex
+      );
+
       return {
         x: date,
         seriesA: seriesAValue,
         seriesB: Number.isNaN(seriesBValue) ? null : seriesBValue,
         event,
         comment,
-        eventLink: extractHttpUrl(event),
-        commentLink: extractHttpUrl(comment)
+        eventLink: eventCellLink || extractHttpUrl(event),
+        commentLink: commentCellLink || extractHttpUrl(comment)
       };
     })
     .filter(Boolean)
@@ -577,6 +599,8 @@ const renderSelectedSeries = () => {
     dateKey: currentSheetContext.dateKey,
     eventKey: currentSheetContext.eventKey,
     commentKey: currentSheetContext.commentKey,
+    worksheet,
+    headers,
     seriesAKey,
     seriesBKey: seriesBKey || null,
     seriesAStyle: seriesABarToggle.checked ? 'bar' : 'line',
@@ -719,10 +743,14 @@ const triggerResetZoom = (event) => {
   windowSizePct = 100;
   renderTimelineWindow();
 
+  chart.stop();
   chart.resetZoom();
   chart.options.scales.x.min = fullMinX;
   chart.options.scales.x.max = fullMaxX;
-  chart.update('none');
+
+  // Force a full redraw (not a no-animation incremental update) to avoid stale canvas artifacts.
+  chart.clear();
+  chart.update();
 
   syncWindowFromChart();
 };

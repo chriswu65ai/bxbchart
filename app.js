@@ -1,12 +1,14 @@
 const fileInput = document.getElementById('excel-file');
 const sheetSelect = document.getElementById('sheet-select');
 const resetZoomButton = document.getElementById('reset-zoom');
-const chartScroll = document.getElementById('chart-scroll');
-const timeframeControl = document.getElementById('timeframe-control');
 const showEventToggle = document.getElementById('show-event-annotations');
-const showNoteToggle = document.getElementById('show-note-annotations');
+const showCommentToggle = document.getElementById('show-comment-annotations');
 const statusText = document.getElementById('status');
 const canvas = document.getElementById('share-chart');
+const timelineWindow = document.getElementById('timeline-window');
+const timelineSelection = document.getElementById('timeline-selection');
+const timelineHandleLeft = document.getElementById('timeline-handle-left');
+const timelineHandleRight = document.getElementById('timeline-handle-right');
 
 let workbook = null;
 let chart = null;
@@ -17,12 +19,17 @@ let fullMinX = null;
 let fullMaxX = null;
 let viewSpan = null;
 
+let windowStartPct = 0;
+let windowSizePct = 100;
+let isTimelineReady = false;
+
 const DATE_KEYS = ['date', 'month', 'time'];
 const PRICE_KEYS = ['price', 'share price', 'close', 'value'];
 const EVENT_KEYS = ['event', 'title', 'milestone'];
-const NOTE_KEYS = ['note', 'notes'];
+const COMMENT_KEYS = ['comment', 'comments', 'note', 'notes'];
 
 const URL_PATTERN = /(https?:\/\/[^\s]+)/i;
+const MIN_WINDOW_PCT = 2;
 
 const extractHttpUrl = (text) => {
   const match = String(text ?? '').match(URL_PATTERN);
@@ -30,9 +37,7 @@ const extractHttpUrl = (text) => {
 
   try {
     const candidate = new URL(match[1]);
-    if (candidate.protocol === 'http:' || candidate.protocol === 'https:') {
-      return candidate.href;
-    }
+    if (candidate.protocol === 'http:' || candidate.protocol === 'https:') return candidate.href;
   } catch (_error) {
     return '';
   }
@@ -92,25 +97,27 @@ const wrapByPixelWidth = (text, chartInstance, maxWidthPx) => {
     const candidate = line ? `${line} ${word}` : word;
     if (ctx.measureText(candidate).width <= maxWidthPx) {
       line = candidate;
-    } else {
-      if (line) lines.push(line);
+      return;
+    }
 
-      if (ctx.measureText(word).width <= maxWidthPx) {
-        line = word;
+    if (line) lines.push(line);
+
+    if (ctx.measureText(word).width <= maxWidthPx) {
+      line = word;
+      return;
+    }
+
+    let segment = '';
+    for (const char of word) {
+      const next = `${segment}${char}`;
+      if (ctx.measureText(next).width <= maxWidthPx) {
+        segment = next;
       } else {
-        let segment = '';
-        for (const char of word) {
-          const next = `${segment}${char}`;
-          if (ctx.measureText(next).width <= maxWidthPx) {
-            segment = next;
-          } else {
-            if (segment) lines.push(segment);
-            segment = char;
-          }
-        }
-        line = segment;
+        if (segment) lines.push(segment);
+        segment = char;
       }
     }
+    line = segment;
   });
 
   if (line) lines.push(line);
@@ -122,61 +129,68 @@ const buildVisibleDatasets = () => {
   if (!chartSource) return [];
 
   const datasets = [chartSource.priceDataset];
-
-  if (chartSource.eventDataset && showEventToggle.checked) {
-    datasets.push(chartSource.eventDataset);
-  }
-
-  if (chartSource.noteDataset && showNoteToggle.checked) {
-    datasets.push(chartSource.noteDataset);
-  }
-
+  if (chartSource.eventDataset && showEventToggle.checked) datasets.push(chartSource.eventDataset);
+  if (chartSource.commentDataset && showCommentToggle.checked) datasets.push(chartSource.commentDataset);
   return datasets;
 };
 
 const refreshAnnotationDatasets = () => {
   if (!chart || !chartSource) return;
-
   chart.data.datasets = buildVisibleDatasets();
   chart.update('none');
 };
 
-const resetScrollbar = () => {
-  fullMinX = null;
-  fullMaxX = null;
-  viewSpan = null;
-  chartScroll.value = '0';
-  chartScroll.min = '0';
-  chartScroll.max = '0';
-  chartScroll.disabled = true;
-  timeframeControl.value = '100';
-  timeframeControl.disabled = true;
+const resetTimelineWindow = () => {
+  windowStartPct = 0;
+  windowSizePct = 100;
+  isTimelineReady = false;
+  timelineWindow.classList.add('is-disabled');
+  timelineSelection.style.left = '0%';
+  timelineSelection.style.width = '100%';
 };
 
-const syncScrollbarFromChart = () => {
+const renderTimelineWindow = () => {
+  timelineSelection.style.left = `${windowStartPct}%`;
+  timelineSelection.style.width = `${windowSizePct}%`;
+};
+
+const syncWindowFromChart = () => {
   if (!chart || fullMinX === null || fullMaxX === null) {
-    resetScrollbar();
+    resetTimelineWindow();
     return;
   }
 
   const xScale = chart.scales.x;
   const visibleMin = xScale.min;
   const visibleMax = xScale.max;
-  viewSpan = visibleMax - visibleMin;
-
   const fullSpan = fullMaxX - fullMinX;
-  const maxOffset = Math.max(0, fullSpan - viewSpan);
-  const offset = Math.min(Math.max(0, visibleMin - fullMinX), maxOffset);
 
-  chartScroll.min = '0';
-  chartScroll.max = String(Math.round(maxOffset));
-  chartScroll.value = String(Math.round(offset));
-  chartScroll.step = String(Math.max(1, Math.round(fullSpan / 1000)));
-  chartScroll.disabled = maxOffset === 0;
+  if (fullSpan <= 0) {
+    resetTimelineWindow();
+    return;
+  }
 
-  const windowPct = Math.max(1, Math.min(100, Math.round((viewSpan / fullSpan) * 100)));
-  timeframeControl.value = String(windowPct);
-  timeframeControl.disabled = fullSpan <= 0;
+  viewSpan = visibleMax - visibleMin;
+  windowSizePct = Math.max(MIN_WINDOW_PCT, Math.min(100, (viewSpan / fullSpan) * 100));
+  windowStartPct = Math.max(0, Math.min(100 - windowSizePct, ((visibleMin - fullMinX) / fullSpan) * 100));
+
+  isTimelineReady = true;
+  timelineWindow.classList.remove('is-disabled');
+  renderTimelineWindow();
+};
+
+const applyWindowToChart = () => {
+  if (!chart || fullMinX === null || fullMaxX === null) return;
+  const fullSpan = fullMaxX - fullMinX;
+  if (fullSpan <= 0) return;
+
+  const nextMin = fullMinX + (windowStartPct / 100) * fullSpan;
+  const nextMax = nextMin + (windowSizePct / 100) * fullSpan;
+
+  chart.options.scales.x.min = nextMin;
+  chart.options.scales.x.max = nextMax;
+  chart.update('none');
+  renderTimelineWindow();
 };
 
 const clearChart = () => {
@@ -186,13 +200,13 @@ const clearChart = () => {
   }
   chartSource = null;
   resetZoomButton.disabled = true;
-  resetScrollbar();
+  resetTimelineWindow();
 };
 
 const buildChart = (rows, columns) => {
   clearChart();
 
-  const { dateKey, priceKey, eventKey, noteKey, priceFormat } = columns;
+  const { dateKey, priceKey, eventKey, commentKey, priceFormat } = columns;
   currentMeta = { priceFormat };
 
   const points = rows
@@ -202,15 +216,15 @@ const buildChart = (rows, columns) => {
       if (!date || Number.isNaN(price)) return null;
 
       const event = eventKey && row[eventKey] ? String(row[eventKey]).trim() : '';
-      const note = noteKey && row[noteKey] ? String(row[noteKey]).trim() : '';
+      const comment = commentKey && row[commentKey] ? String(row[commentKey]).trim() : '';
 
       return {
         x: date,
         y: price,
         event,
-        note,
+        comment,
         eventLink: extractHttpUrl(event),
-        noteLink: extractHttpUrl(note)
+        commentLink: extractHttpUrl(comment)
       };
     })
     .filter(Boolean)
@@ -222,7 +236,7 @@ const buildChart = (rows, columns) => {
   }
 
   const eventPoints = points.filter((point) => point.event);
-  const notePoints = points.filter((point) => point.note);
+  const commentPoints = points.filter((point) => point.comment);
 
   chartSource = {
     priceDataset: {
@@ -253,17 +267,17 @@ const buildChart = (rows, columns) => {
             hoverBackgroundColor: '#f97316'
           }
         : null,
-    noteDataset:
-      noteKey && notePoints.length
+    commentDataset:
+      commentKey && commentPoints.length
         ? {
             type: 'bubble',
-            label: noteKey,
-            data: notePoints.map((point) => ({
+            label: 'Comment',
+            data: commentPoints.map((point) => ({
               x: point.x,
               y: point.y,
               r: 7,
-              annotation: point.note,
-              link: point.noteLink
+              annotation: point.comment,
+              link: point.commentLink
             })),
             backgroundColor: '#22c55e',
             borderColor: '#15803d',
@@ -342,9 +356,9 @@ const buildChart = (rows, columns) => {
             wheel: { enabled: true },
             pinch: { enabled: true },
             mode: 'x',
-            onZoomComplete: syncScrollbarFromChart
+            onZoomComplete: syncWindowFromChart
           },
-          pan: { enabled: true, mode: 'x', onPanComplete: syncScrollbarFromChart }
+          pan: { enabled: true, mode: 'x', onPanComplete: syncWindowFromChart }
         }
       }
     }
@@ -352,11 +366,11 @@ const buildChart = (rows, columns) => {
 
   fullMinX = points[0].x.getTime();
   fullMaxX = points[points.length - 1].x.getTime();
-  syncScrollbarFromChart();
+  syncWindowFromChart();
 
   resetZoomButton.disabled = false;
   updateStatus(
-    `Rendered ${points.length} points with ${eventPoints.length} events and ${notePoints.length} notes.`
+    `Rendered ${points.length} points with ${eventPoints.length} events and ${commentPoints.length} comments.`
   );
 };
 
@@ -367,9 +381,7 @@ const detectPriceFormat = (worksheet, headers, priceKey, rowCount) => {
   for (let rowIndex = 1; rowIndex <= rowCount; rowIndex += 1) {
     const cellAddress = XLSX.utils.encode_cell({ r: rowIndex, c: priceCol });
     const cell = worksheet[cellAddress];
-    if (cell && typeof cell.v === 'number' && cell.z) {
-      return cell.z;
-    }
+    if (cell && typeof cell.v === 'number' && cell.z) return cell.z;
   }
 
   return '';
@@ -388,7 +400,7 @@ const parseSheet = (sheetName) => {
   const dateKey = getFirstMatchingKey(headers, DATE_KEYS);
   const priceKey = getFirstMatchingKey(headers, PRICE_KEYS);
   const eventKey = getFirstMatchingKey(headers, EVENT_KEYS);
-  const noteKey = getFirstMatchingKey(headers, NOTE_KEYS);
+  const commentKey = getFirstMatchingKey(headers, COMMENT_KEYS);
 
   if (!dateKey || !priceKey) {
     updateStatus(
@@ -399,7 +411,7 @@ const parseSheet = (sheetName) => {
   }
 
   const priceFormat = detectPriceFormat(worksheet, headers, priceKey, rows.length);
-  buildChart(rows, { dateKey, priceKey, eventKey, noteKey, priceFormat });
+  buildChart(rows, { dateKey, priceKey, eventKey, commentKey, priceFormat });
 };
 
 fileInput.addEventListener('change', async (event) => {
@@ -440,42 +452,75 @@ sheetSelect.addEventListener('change', (event) => {
   parseSheet(sheetName);
 });
 
-chartScroll.addEventListener('input', (event) => {
-  if (!chart || fullMinX === null || fullMaxX === null || viewSpan === null) return;
-
-  const fullSpan = fullMaxX - fullMinX;
-  const maxOffset = Math.max(0, fullSpan - viewSpan);
-  const offset = Math.min(Math.max(0, Number(event.target.value)), maxOffset);
-
-  chart.options.scales.x.min = fullMinX + offset;
-  chart.options.scales.x.max = fullMinX + offset + viewSpan;
-  chart.update('none');
-});
-
-timeframeControl.addEventListener('input', (event) => {
-  if (!chart || fullMinX === null || fullMaxX === null) return;
-
-  const fullSpan = fullMaxX - fullMinX;
-  if (fullSpan <= 0) return;
-
-  const targetPct = Math.max(1, Math.min(100, Number(event.target.value)));
-  const targetSpan = Math.max(1, Math.round((targetPct / 100) * fullSpan));
-
-  const currentOffset = Number(chartScroll.value || 0);
-  const maxOffset = Math.max(0, fullSpan - targetSpan);
-  const clampedOffset = Math.min(currentOffset, maxOffset);
-
-  chart.options.scales.x.min = fullMinX + clampedOffset;
-  chart.options.scales.x.max = fullMinX + clampedOffset + targetSpan;
-  chart.update('none');
-  syncScrollbarFromChart();
-});
-
 showEventToggle.addEventListener('change', refreshAnnotationDatasets);
-showNoteToggle.addEventListener('change', refreshAnnotationDatasets);
+showCommentToggle.addEventListener('change', refreshAnnotationDatasets);
 
 resetZoomButton.addEventListener('click', () => {
   if (!chart) return;
   chart.resetZoom();
-  syncScrollbarFromChart();
+  syncWindowFromChart();
 });
+
+const setupTimelineInteractions = () => {
+  let dragMode = null;
+  let startX = 0;
+  let startWindow = { start: 0, size: 100 };
+
+  const beginDrag = (mode, event) => {
+    if (!isTimelineReady) return;
+    dragMode = mode;
+    startX = event.clientX;
+    startWindow = { start: windowStartPct, size: windowSizePct };
+
+    const onMove = (moveEvent) => {
+      if (!dragMode) return;
+      const rect = timelineWindow.getBoundingClientRect();
+      if (rect.width <= 0) return;
+
+      const deltaPct = ((moveEvent.clientX - startX) / rect.width) * 100;
+
+      if (dragMode === 'move') {
+        windowStartPct = Math.max(0, Math.min(100 - startWindow.size, startWindow.start + deltaPct));
+      } else if (dragMode === 'left') {
+        const nextStart = Math.max(0, Math.min(startWindow.start + startWindow.size - MIN_WINDOW_PCT, startWindow.start + deltaPct));
+        const nextSize = startWindow.size + (startWindow.start - nextStart);
+        windowStartPct = nextStart;
+        windowSizePct = Math.max(MIN_WINDOW_PCT, Math.min(100, nextSize));
+      } else if (dragMode === 'right') {
+        const nextSize = Math.max(
+          MIN_WINDOW_PCT,
+          Math.min(100 - startWindow.start, startWindow.size + deltaPct)
+        );
+        windowSizePct = nextSize;
+      }
+
+      applyWindowToChart();
+    };
+
+    const onUp = () => {
+      dragMode = null;
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+    };
+
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+  };
+
+  timelineSelection.addEventListener('pointerdown', (event) => {
+    if (event.target === timelineHandleLeft || event.target === timelineHandleRight) return;
+    beginDrag('move', event);
+  });
+
+  timelineHandleLeft.addEventListener('pointerdown', (event) => {
+    event.stopPropagation();
+    beginDrag('left', event);
+  });
+
+  timelineHandleRight.addEventListener('pointerdown', (event) => {
+    event.stopPropagation();
+    beginDrag('right', event);
+  });
+};
+
+setupTimelineInteractions();

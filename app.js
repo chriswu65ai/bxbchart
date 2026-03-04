@@ -7,6 +7,7 @@ const seriesBBarToggle = document.getElementById('series-b-bar');
 const resetZoomButton = document.getElementById('reset-zoom');
 const showEventToggle = document.getElementById('show-event-annotations');
 const showCommentToggle = document.getElementById('show-comment-annotations');
+const disableLinksToggle = document.getElementById('disable-links');
 const statusText = document.getElementById('status');
 const canvas = document.getElementById('share-chart');
 const timelineWindow = document.getElementById('timeline-window');
@@ -160,7 +161,7 @@ const makeSeriesDataset = ({ label, seriesKey, axisId, points, color, style }) =
       type: 'bar',
       backgroundColor: `${color}cc`,
       borderWidth: 1,
-      barPercentage: 1.0,
+      barPercentage: 0.9,
       categoryPercentage: 0.9,
       maxBarThickness: 64
     };
@@ -437,7 +438,7 @@ const buildChart = (rows, columns) => {
           return ds?.type === 'bubble';
         });
 
-        if (!bubbleHit) return;
+        if (!bubbleHit || disableLinksToggle.checked) return;
 
         const dataset = chartInstance.data.datasets[bubbleHit.datasetIndex];
         const target = dataset?.data?.[bubbleHit.index];
@@ -454,7 +455,8 @@ const buildChart = (rows, columns) => {
         const { datasetIndex, index } = activeElements[0];
         const dataset = chartInstance.data.datasets[datasetIndex];
         const target = dataset?.data?.[index];
-        canvas.style.cursor = dataset?.type === 'bubble' && target?.link ? 'pointer' : 'default';
+        canvas.style.cursor =
+          dataset?.type === 'bubble' && target?.link && !disableLinksToggle.checked ? 'pointer' : 'default';
       },
       scales: {
         x: {
@@ -745,6 +747,9 @@ seriesBBarToggle.addEventListener('change', () => {
 
 showEventToggle.addEventListener('change', refreshAnnotationDatasets);
 showCommentToggle.addEventListener('change', refreshAnnotationDatasets);
+disableLinksToggle.addEventListener('change', () => {
+  canvas.style.cursor = 'default';
+});
 
 const triggerResetZoom = (event) => {
   if (event) event.preventDefault();

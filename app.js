@@ -14,6 +14,7 @@ const timelineWindow = document.getElementById('timeline-window');
 const timelineSelection = document.getElementById('timeline-selection');
 const timelineHandleLeft = document.getElementById('timeline-handle-left');
 const timelineHandleRight = document.getElementById('timeline-handle-right');
+const quickTimeframeButtons = Array.from(document.querySelectorAll('.quick-timeframe-btn[data-years]'));
 
 let workbook = null;
 let chart = null;
@@ -264,6 +265,26 @@ const applyWindowToChart = () => {
   renderTimelineWindow();
 };
 
+const setQuickTimeframeButtonsDisabled = (disabled) => {
+  quickTimeframeButtons.forEach((button) => {
+    button.disabled = disabled;
+  });
+};
+
+const applyLatestYearsWindow = (years) => {
+  if (!chart || fullMinX === null || fullMaxX === null || !Number.isFinite(years) || years <= 0) return;
+
+  const maxDate = new Date(fullMaxX);
+  const minDate = new Date(maxDate);
+  minDate.setFullYear(maxDate.getFullYear() - years);
+
+  const targetMin = Math.max(fullMinX, minDate.getTime());
+  chart.options.scales.x.min = targetMin;
+  chart.options.scales.x.max = fullMaxX;
+  chart.update('none');
+  syncWindowFromChart();
+};
+
 const getCurrentTimelineWindow = () => {
   if (!isTimelineReady) return null;
   if (!Number.isFinite(windowStartPct) || !Number.isFinite(windowSizePct)) return null;
@@ -283,6 +304,7 @@ const clearChart = () => {
   fullMaxX = null;
   viewSpan = null;
   resetZoomButton.disabled = true;
+  setQuickTimeframeButtonsDisabled(true);
   resetTimelineWindow();
 };
 
@@ -579,6 +601,7 @@ const buildChart = (rows, columns) => {
   if (chart) chart.update('none');
 
   resetZoomButton.disabled = false;
+  setQuickTimeframeButtonsDisabled(false);
   updateStatus(
     `Rendered ${points.length} points (${seriesAKey}${seriesBKey ? ` + ${seriesBKey}` : ''}) with ${eventPoints.length} events and ${commentPoints.length} comments.`
   );
@@ -823,6 +846,13 @@ const triggerResetZoom = (event) => {
 
 resetZoomButton.addEventListener('click', triggerResetZoom);
 resetZoomButton.addEventListener('touchend', triggerResetZoom, { passive: false });
+
+quickTimeframeButtons.forEach((button) => {
+  button.addEventListener('click', () => {
+    const years = Number(button.dataset.years);
+    applyLatestYearsWindow(years);
+  });
+});
 
 const setupTimelineInteractions = () => {
   let dragMode = null;

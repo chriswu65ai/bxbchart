@@ -136,3 +136,9 @@ button:disabled {
   width: auto;
   margin: 0;
 }
+
+
+.toggle-group {
+  display: grid;
+  gap: 0.35rem;
+}

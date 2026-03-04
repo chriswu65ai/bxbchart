@@ -33,10 +33,16 @@
 
         <button id="reset-zoom" type="button" disabled>Reset Zoom</button>
 
-        <label class="toggle-control" for="toggle-annotations">
-          <input id="toggle-annotations" type="checkbox" checked />
-          Show Event/Note annotations
-        </label>
+        <div class="toggle-group">
+          <label class="toggle-control" for="show-event-annotations">
+            <input id="show-event-annotations" type="checkbox" checked />
+            Show Event annotations
+          </label>
+          <label class="toggle-control" for="show-note-annotations">
+            <input id="show-note-annotations" type="checkbox" checked />
+            Show Note annotations
+          </label>
+        </div>
       </section>
 
       <section class="status-panel" aria-live="polite">
@@ -49,13 +55,16 @@
         </div>
         <label class="scroll-label" for="chart-scroll">Timeline scroll</label>
         <input id="chart-scroll" type="range" min="0" max="0" value="0" disabled />
+
+        <label class="scroll-label" for="timeframe-control">Timeframe width</label>
+        <input id="timeframe-control" type="range" min="1" max="100" value="100" disabled />
       </section>
 
       <section class="tips">
         <h2>How to use</h2>
         <ul>
           <li>Scroll to zoom horizontally, or pinch on touch devices.</li>
-          <li>Drag the chart to pan through time, or use the timeline scroll bar.</li>
+          <li>Drag the chart to pan through time, use Timeline scroll to move, and Timeframe width to compress/widen the window.</li>
           <li>Hover event/note bubbles to view annotation text, and click a bubble when it contains a URL.</li>
         </ul>
       </section>

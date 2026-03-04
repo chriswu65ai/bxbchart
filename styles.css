@@ -257,6 +257,7 @@ body.is-timeline-dragging {
 
 .quick-timeframe-btn {
   width: auto;
+  flex: 0 0 auto;
   min-width: 3.25rem;
   padding: 0.35rem 0.7rem;
   line-height: 1.1;

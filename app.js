@@ -649,7 +649,7 @@ const populateSeriesSelectors = () => {
   syncSeriesSelectorOptions();
 };
 
-const renderSelectedSeries = () => {
+const renderSelectedSeries = ({ preserveTimeline = true } = {}) => {
   if (!currentSheetContext) return;
 
   const seriesAKey = seriesASelect.value;
@@ -676,7 +676,7 @@ const renderSelectedSeries = () => {
     seriesFormats[seriesBKey] = detectSeriesFormat(worksheet, headers, seriesBKey, rowCount);
   }
 
-  const preserveTimeline = getCurrentTimelineWindow();
+  const preservedTimelineWindow = preserveTimeline ? getCurrentTimelineWindow() : null;
 
   buildChart(currentSheetContext.rows, {
     dateKey: currentSheetContext.dateKey,
@@ -689,7 +689,7 @@ const renderSelectedSeries = () => {
     seriesAStyle: seriesABarToggle.checked ? 'bar' : 'line',
     seriesBStyle: seriesBBarToggle.checked ? 'bar' : 'line',
     seriesFormats,
-    preserveTimeline
+    preserveTimeline: preservedTimelineWindow
   });
 };
 
@@ -740,7 +740,7 @@ const parseSheet = (sheetName) => {
     return;
   }
 
-  renderSelectedSeries();
+  renderSelectedSeries({ preserveTimeline: false });
 };
 
 fileInput.addEventListener('change', async (event) => {
@@ -775,8 +775,15 @@ fileInput.addEventListener('change', async (event) => {
     }
 
     sheetSelect.disabled = false;
-    sheetSelect.value = '';
-    updateStatus(`Loaded ${file.name}. Select a sheet, then choose Series A/Series B.`);
+    const [firstSheet] = workbook.SheetNames;
+    sheetSelect.value = firstSheet || '';
+
+    if (firstSheet) {
+      parseSheet(firstSheet);
+      updateStatus(`Loaded ${file.name}. Showing ${firstSheet}. You can change Sheet/Series selections anytime.`);
+    } else {
+      updateStatus(`Loaded ${file.name}. Select a sheet, then choose Series A/Series B.`);
+    }
   } catch (error) {
     workbook = null;
     sheetSelect.disabled = true;

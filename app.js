@@ -23,6 +23,8 @@ const seriesAResetButton = document.getElementById('series-a-reset');
 const seriesBMaxInput = document.getElementById('series-b-max');
 const seriesBMinInput = document.getElementById('series-b-min');
 const seriesBResetButton = document.getElementById('series-b-reset');
+const seriesAInvertToggle = document.getElementById('series-a-invert');
+const seriesBInvertToggle = document.getElementById('series-b-invert');
 const seriesLeadLagControls = document.getElementById('series-leadlag-controls');
 const seriesALeadLagInput = document.getElementById('series-a-leadlag');
 const seriesBLeadLagInput = document.getElementById('series-b-leadlag');
@@ -47,6 +49,7 @@ let axisOverrides = {
   y: { min: null, max: null },
   y1: { min: null, max: null }
 };
+let axisInversions = { y: false, y1: false };
 let seriesLeadLagOffsets = { seriesA: 0, seriesB: 0 };
 
 let windowStartPct = 0;
@@ -476,10 +479,12 @@ const updateAxisControlsUI = () => {
   seriesAMaxInput.disabled = !hasChart;
   seriesAMinInput.disabled = !hasChart;
   seriesAResetButton.disabled = !hasChart;
+  seriesAInvertToggle.disabled = !hasChart;
 
   seriesBMaxInput.disabled = !hasChart || !hasSeriesB;
   seriesBMinInput.disabled = !hasChart || !hasSeriesB;
   seriesBResetButton.disabled = !hasChart || !hasSeriesB;
+  seriesBInvertToggle.disabled = !hasChart || !hasSeriesB;
 
   seriesALeadLagInput.disabled = !hasChart;
   seriesBLeadLagInput.disabled = !hasChart || !hasSeriesB;
@@ -490,6 +495,9 @@ const updateAxisControlsUI = () => {
 
   seriesBMaxInput.value = formatAxisInputValue(axisOverrides.y1.max);
   seriesBMinInput.value = formatAxisInputValue(axisOverrides.y1.min);
+
+  seriesAInvertToggle.checked = Boolean(axisInversions.y);
+  seriesBInvertToggle.checked = Boolean(axisInversions.y1);
 
   seriesALeadLagInput.value = String(seriesLeadLagOffsets.seriesA || 0);
   seriesBLeadLagInput.value = String(seriesLeadLagOffsets.seriesB || 0);
@@ -508,6 +516,8 @@ const applyAxisOverrides = () => {
   scales.y.max = Number.isFinite(yMax) ? yMax : axisDefaults.y.max;
   scales.y1.min = Number.isFinite(y1Min) ? y1Min : axisDefaults.y1.min;
   scales.y1.max = Number.isFinite(y1Max) ? y1Max : axisDefaults.y1.max;
+  scales.y.reverse = Boolean(axisInversions.y);
+  scales.y1.reverse = Boolean(axisInversions.y1);
 
   chart.update();
 };
@@ -520,6 +530,7 @@ const setAxisOverride = (axisId, bound, value) => {
 const resetAxisOverride = (axisId) => {
   axisOverrides[axisId].min = null;
   axisOverrides[axisId].max = null;
+  axisInversions[axisId] = false;
   applyAxisOverrides();
   updateAxisControlsUI();
 };
@@ -554,6 +565,7 @@ const clearChart = () => {
   viewSpan = null;
   axisDefaults = { y: { min: null, max: null }, y1: { min: null, max: null } };
   axisOverrides = { y: { min: null, max: null }, y1: { min: null, max: null } };
+  axisInversions = { y: false, y1: false };
   seriesLeadLagOffsets = { seriesA: 0, seriesB: 0 };
   resetZoomButton.disabled = true;
   setQuickTimeframeButtonsDisabled(true);
@@ -888,6 +900,7 @@ const buildChart = (rows, columns) => {
       y1: { min: chart.scales.y1?.min ?? null, max: chart.scales.y1?.max ?? null }
     };
     axisOverrides = { y: { min: null, max: null }, y1: { min: null, max: null } };
+    axisInversions = { y: false, y1: false };
     updateAxisControlsUI();
   }
 
@@ -1184,6 +1197,18 @@ seriesAResetButton.addEventListener('click', () => {
 seriesBResetButton.addEventListener('click', () => {
   if (!chart || !chartSource?.seriesB) return;
   resetAxisOverride('y1');
+});
+
+seriesAInvertToggle.addEventListener('change', () => {
+  if (!chart) return;
+  axisInversions.y = seriesAInvertToggle.checked;
+  applyAxisOverrides();
+});
+
+seriesBInvertToggle.addEventListener('change', () => {
+  if (!chart || !chartSource?.seriesB) return;
+  axisInversions.y1 = seriesBInvertToggle.checked;
+  applyAxisOverrides();
 });
 
 seriesALeadLagInput.addEventListener('input', () => {

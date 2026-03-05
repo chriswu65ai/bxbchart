@@ -348,7 +348,7 @@ const applyLatestYearsWindow = (years) => {
 
   const targetMin = Math.max(fullMinX, minDate.getTime());
   chart.options.scales.x.min = targetMin;
-  chart.options.scales.x.max = fullMaxX;
+  chart.options.scales.x.max = anchorMaxX;
   chart.update('none');
   syncWindowFromChart();
 };

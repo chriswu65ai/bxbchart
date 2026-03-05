@@ -24,6 +24,7 @@ let currentSheetContext = null;
 
 let fullMinX = null;
 let fullMaxX = null;
+let latestSeriesAMaxX = null;
 let viewSpan = null;
 
 let windowStartPct = 0;
@@ -208,13 +209,14 @@ const wrapByPixelWidth = (text, chartInstance, maxWidthPx) => {
   return lines;
 };
 
-const makeSeriesDataset = ({ label, seriesKey, axisId, points, color, style }) => {
+const makeSeriesDataset = ({ label, seriesKey, axisId, points, color, style, order }) => {
   const common = {
     label,
     seriesKey,
     yAxisID: axisId,
     data: points,
-    borderColor: color
+    borderColor: color,
+    order
   };
 
   if (style === 'bar') {
@@ -223,8 +225,8 @@ const makeSeriesDataset = ({ label, seriesKey, axisId, points, color, style }) =
       type: 'bar',
       backgroundColor: `${color}cc`,
       borderWidth: 1,
-      barPercentage: 6.0,
-      categoryPercentage: 0.9,
+      barPercentage: 0.9,
+      categoryPercentage: 0.8,
       maxBarThickness: 64
     };
   }
@@ -323,13 +325,14 @@ const setQuickTimeframeButtonsDisabled = (disabled) => {
 const applyLatestYearsWindow = (years) => {
   if (!chart || fullMinX === null || fullMaxX === null || !Number.isFinite(years) || years <= 0) return;
 
-  const maxDate = new Date(fullMaxX);
+  const anchorMaxX = Number.isFinite(latestSeriesAMaxX) ? latestSeriesAMaxX : fullMaxX;
+  const maxDate = new Date(anchorMaxX);
   const minDate = new Date(maxDate);
   minDate.setFullYear(maxDate.getFullYear() - years);
 
   const targetMin = Math.max(fullMinX, minDate.getTime());
   chart.options.scales.x.min = targetMin;
-  chart.options.scales.x.max = fullMaxX;
+  chart.options.scales.x.max = anchorMaxX;
   chart.update('none');
   syncWindowFromChart();
 };
@@ -351,6 +354,7 @@ const clearChart = () => {
   currentMeta = null;
   fullMinX = null;
   fullMaxX = null;
+  latestSeriesAMaxX = null;
   viewSpan = null;
   resetZoomButton.disabled = true;
   setQuickTimeframeButtonsDisabled(true);
@@ -455,8 +459,18 @@ const buildChart = (rows, columns) => {
   const eventPoints = points.filter((point) => point.event);
   const commentPoints = points.filter((point) => point.comment);
 
+  const latestDateInFile = rows.reduce((latest, row) => {
+    const rowDate = parseDate(row[dateKey]);
+    if (!rowDate) return latest;
+    const rowTime = rowDate.getTime();
+    return Math.max(latest, rowTime);
+  }, Number.NEGATIVE_INFINITY);
+
   const nextFullMinX = points[0].x.getTime();
-  const nextFullMaxX = points[points.length - 1].x.getTime();
+  const nextSeriesAMaxX = points[points.length - 1].x.getTime();
+  const nextFullMaxX = Number.isFinite(latestDateInFile)
+    ? latestDateInFile
+    : nextSeriesAMaxX;
 
   chartSource = {
     seriesADataset: makeSeriesDataset({
@@ -465,7 +479,8 @@ const buildChart = (rows, columns) => {
       axisId: 'y',
       points: points.map((point) => ({ x: point.x, y: point.seriesA })),
       color: SERIES_A_COLOR,
-      style: seriesAStyle
+      style: seriesAStyle,
+      order: 2
     }),
     seriesBDataset:
       seriesBKey && points.some((point) => point.seriesB !== null)
@@ -475,7 +490,8 @@ const buildChart = (rows, columns) => {
             axisId: 'y1',
             points: points.filter((point) => point.seriesB !== null).map((point) => ({ x: point.x, y: point.seriesB })),
             color: SERIES_B_COLOR,
-            style: seriesBStyle
+            style: seriesBStyle,
+            order: 3
           })
         : null,
     eventDataset:
@@ -494,7 +510,8 @@ const buildChart = (rows, columns) => {
             backgroundColor: '#f59e0b',
             borderColor: '#b45309',
             borderWidth: 1,
-            hoverBackgroundColor: '#f97316'
+            hoverBackgroundColor: '#f97316',
+            order: 1
           }
         : null,
     commentDataset:
@@ -513,7 +530,8 @@ const buildChart = (rows, columns) => {
             backgroundColor: '#22c55e',
             borderColor: '#15803d',
             borderWidth: 1,
-            hoverBackgroundColor: '#16a34a'
+            hoverBackgroundColor: '#16a34a',
+            order: 1
           }
         : null
   };
@@ -563,8 +581,8 @@ const buildChart = (rows, columns) => {
           type: 'time',
           time: { unit: 'month' },
           title: { display: true, text: dateKey },
-          min: preservedMinX,
-          max: preservedMaxX
+          min: nextFullMinX,
+          max: nextFullMaxX
         },
         y: {
           position: 'left',
@@ -634,6 +652,7 @@ const buildChart = (rows, columns) => {
 
   fullMinX = nextFullMinX;
   fullMaxX = nextFullMaxX;
+  latestSeriesAMaxX = nextSeriesAMaxX;
   preservedMinX = nextFullMinX;
   preservedMaxX = nextFullMaxX;
   syncBubbleLinks(chart);

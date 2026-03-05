@@ -24,6 +24,7 @@ let currentSheetContext = null;
 
 let fullMinX = null;
 let fullMaxX = null;
+let latestSeriesAMaxX = null;
 let viewSpan = null;
 
 let windowStartPct = 0;
@@ -224,8 +225,8 @@ const makeSeriesDataset = ({ label, seriesKey, axisId, points, color, style, ord
       type: 'bar',
       backgroundColor: `${color}cc`,
       borderWidth: 1,
-      barPercentage: 6.0,
-      categoryPercentage: 0.9,
+      barPercentage: 0.9,
+      categoryPercentage: 0.8,
       maxBarThickness: 64
     };
   }
@@ -324,13 +325,14 @@ const setQuickTimeframeButtonsDisabled = (disabled) => {
 const applyLatestYearsWindow = (years) => {
   if (!chart || fullMinX === null || fullMaxX === null || !Number.isFinite(years) || years <= 0) return;
 
-  const maxDate = new Date(fullMaxX);
+  const anchorMaxX = Number.isFinite(latestSeriesAMaxX) ? latestSeriesAMaxX : fullMaxX;
+  const maxDate = new Date(anchorMaxX);
   const minDate = new Date(maxDate);
   minDate.setFullYear(maxDate.getFullYear() - years);
 
   const targetMin = Math.max(fullMinX, minDate.getTime());
   chart.options.scales.x.min = targetMin;
-  chart.options.scales.x.max = fullMaxX;
+  chart.options.scales.x.max = anchorMaxX;
   chart.update('none');
   syncWindowFromChart();
 };
@@ -352,6 +354,7 @@ const clearChart = () => {
   currentMeta = null;
   fullMinX = null;
   fullMaxX = null;
+  latestSeriesAMaxX = null;
   viewSpan = null;
   resetZoomButton.disabled = true;
   setQuickTimeframeButtonsDisabled(true);
@@ -464,9 +467,10 @@ const buildChart = (rows, columns) => {
   }, Number.NEGATIVE_INFINITY);
 
   const nextFullMinX = points[0].x.getTime();
+  const nextSeriesAMaxX = points[points.length - 1].x.getTime();
   const nextFullMaxX = Number.isFinite(latestDateInFile)
     ? latestDateInFile
-    : points[points.length - 1].x.getTime();
+    : nextSeriesAMaxX;
 
   chartSource = {
     seriesADataset: makeSeriesDataset({
@@ -648,6 +652,7 @@ const buildChart = (rows, columns) => {
 
   fullMinX = nextFullMinX;
   fullMaxX = nextFullMaxX;
+  latestSeriesAMaxX = nextSeriesAMaxX;
   preservedMinX = nextFullMinX;
   preservedMaxX = nextFullMaxX;
   syncBubbleLinks(chart);

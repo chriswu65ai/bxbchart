@@ -577,8 +577,8 @@ const buildChart = (rows, columns) => {
           type: 'time',
           time: { unit: 'month' },
           title: { display: true, text: dateKey },
-          min: preservedMinX,
-          max: preservedMaxX
+          min: nextFullMinX,
+          max: nextFullMaxX
         },
         y: {
           position: 'left',

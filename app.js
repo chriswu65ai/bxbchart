@@ -137,12 +137,28 @@ const parseNumeric = (value) => {
   return Number(value);
 };
 
+const extractHyperlinkFromFormula = (formula) => {
+  if (typeof formula !== 'string') return '';
+
+  const match = formula.match(/^\s*=\s*HYPERLINK\s*\(\s*"((?:""|[^"])*)"/i);
+  if (!match) return '';
+
+  const url = match[1].replace(/""/g, '"').trim();
+  return extractHttpUrl(url);
+};
+
 const getWorksheetCellHyperlink = (worksheet, rowIndex, colIndex) => {
   if (colIndex < 0) return '';
   const cellAddress = XLSX.utils.encode_cell({ r: rowIndex, c: colIndex });
   const cell = worksheet[cellAddress];
+
   const target = cell?.l?.Target || cell?.l?.target;
-  return target ? String(target) : '';
+  if (target) return extractHttpUrl(target);
+
+  const formulaLink = extractHyperlinkFromFormula(cell?.f);
+  if (formulaLink) return formulaLink;
+
+  return '';
 };
 
 const formatDateOnly = (value) =>
@@ -424,7 +440,11 @@ const buildChart = (rows, columns) => {
       const seriesAValue = parseNumeric(row[seriesAKey]);
       const seriesBValue = seriesBKey ? parseNumeric(row[seriesBKey]) : NaN;
 
-      if (!date || Number.isNaN(seriesAValue)) return null;
+      if (!date) return null;
+
+      const normalizedSeriesA = Number.isNaN(seriesAValue) ? null : seriesAValue;
+      const normalizedSeriesB = Number.isNaN(seriesBValue) ? null : seriesBValue;
+      if (normalizedSeriesA === null && normalizedSeriesB === null) return null;
 
       const event = eventKey && row[eventKey] ? String(row[eventKey]).trim() : '';
       const comment = commentKey && row[commentKey] ? String(row[commentKey]).trim() : '';
@@ -440,8 +460,8 @@ const buildChart = (rows, columns) => {
 
       return {
         x: date,
-        seriesA: seriesAValue,
-        seriesB: Number.isNaN(seriesBValue) ? null : seriesBValue,
+        seriesA: normalizedSeriesA,
+        seriesB: normalizedSeriesB,
         event,
         comment,
         eventLink: eventCellLink || extractHttpUrl(event),
@@ -456,8 +476,21 @@ const buildChart = (rows, columns) => {
     return;
   }
 
-  const eventPoints = points.filter((point) => point.event);
-  const commentPoints = points.filter((point) => point.comment);
+  const seriesAPoints = points.filter((point) => point.seriesA !== null);
+  if (!seriesAPoints.length) {
+    updateStatus('Series A has no valid data points for the selected columns.', true);
+    return;
+  }
+
+  const eventPoints = points.filter((point) => point.event && point.seriesA !== null);
+  const commentPoints = points.filter((point) => point.comment && point.seriesA !== null);
+
+  const latestDateInFile = rows.reduce((latest, row) => {
+    const rowDate = parseDate(row[dateKey]);
+    if (!rowDate) return latest;
+    const rowTime = rowDate.getTime();
+    return Math.max(latest, rowTime);
+  }, Number.NEGATIVE_INFINITY);
 
   const latestDateInFile = rows.reduce((latest, row) => {
     const rowDate = parseDate(row[dateKey]);
@@ -467,7 +500,7 @@ const buildChart = (rows, columns) => {
   }, Number.NEGATIVE_INFINITY);
 
   const nextFullMinX = points[0].x.getTime();
-  const nextSeriesAMaxX = points[points.length - 1].x.getTime();
+  const nextSeriesAMaxX = seriesAPoints[seriesAPoints.length - 1].x.getTime();
   const nextFullMaxX = Number.isFinite(latestDateInFile)
     ? latestDateInFile
     : nextSeriesAMaxX;
@@ -477,7 +510,7 @@ const buildChart = (rows, columns) => {
       label: seriesAKey,
       seriesKey: seriesAKey,
       axisId: 'y',
-      points: points.map((point) => ({ x: point.x, y: point.seriesA })),
+      points: seriesAPoints.map((point) => ({ x: point.x, y: point.seriesA })),
       color: SERIES_A_COLOR,
       style: seriesAStyle,
       order: 2

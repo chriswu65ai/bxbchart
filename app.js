@@ -41,7 +41,7 @@ const COMMENT_KEYS = ['comment', 'comments', 'note', 'notes'];
 const URL_PATTERN = /(https?:\/\/[^\s]+)/i;
 const MIN_WINDOW_PCT = 2;
 const SERIES_A_COLOR = '#023047';
-const SERIES_B_COLOR = '#22C4DD';
+const SERIES_B_COLOR = '#a90000';
 
 const extractHttpUrl = (text) => {
   const match = String(text ?? '').match(URL_PATTERN);
@@ -243,10 +243,15 @@ const makeSeriesDataset = ({ label, seriesKey, axisId, points, color, style }) =
 const buildVisibleDatasets = () => {
   if (!chartSource) return [];
 
-  const datasets = [chartSource.seriesADataset];
+  const datasets = [];
+
+  // Draw order (bottom -> top): Series B, annotations, Series A.
+  // This keeps markers visible over Series B while still under Series A.
   if (chartSource.seriesBDataset) datasets.push(chartSource.seriesBDataset);
   if (chartSource.eventDataset && showEventToggle.checked) datasets.push(chartSource.eventDataset);
   if (chartSource.commentDataset && showCommentToggle.checked) datasets.push(chartSource.commentDataset);
+  datasets.push(chartSource.seriesADataset);
+
   return datasets;
 };
 

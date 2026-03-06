@@ -5,6 +5,7 @@ const seriesBSelect = document.getElementById('series-b-select');
 const seriesCSelect = document.getElementById('series-c-select');
 const seriesABarToggle = document.getElementById('series-a-bar');
 const seriesBBarToggle = document.getElementById('series-b-bar');
+const seriesCBarToggle = document.getElementById('series-c-bar');
 const resetZoomButton = document.getElementById('reset-zoom');
 const showEventToggle = document.getElementById('show-event-annotations');
 const showCommentToggle = document.getElementById('show-comment-annotations');
@@ -20,17 +21,23 @@ const timelineHandleRight = document.getElementById('timeline-handle-right');
 const quickTimeframeButtons = Array.from(document.querySelectorAll('.quick-timeframe-btn[data-years]'));
 const seriesAAxisControls = document.getElementById('series-a-axis-controls');
 const seriesBAxisControls = document.getElementById('series-b-axis-controls');
+const seriesCAxisControls = document.getElementById('series-c-axis-controls');
 const seriesAMaxInput = document.getElementById('series-a-max');
 const seriesAMinInput = document.getElementById('series-a-min');
 const seriesAResetButton = document.getElementById('series-a-reset');
 const seriesBMaxInput = document.getElementById('series-b-max');
 const seriesBMinInput = document.getElementById('series-b-min');
 const seriesBResetButton = document.getElementById('series-b-reset');
+const seriesCMaxInput = document.getElementById('series-c-max');
+const seriesCMinInput = document.getElementById('series-c-min');
+const seriesCResetButton = document.getElementById('series-c-reset');
 const seriesAInvertToggle = document.getElementById('series-a-invert');
 const seriesBInvertToggle = document.getElementById('series-b-invert');
+const seriesCInvertToggle = document.getElementById('series-c-invert');
 const seriesLeadLagControls = document.getElementById('series-leadlag-controls');
 const seriesALeadLagInput = document.getElementById('series-a-leadlag');
 const seriesBLeadLagInput = document.getElementById('series-b-leadlag');
+const seriesCLeadLagInput = document.getElementById('series-c-leadlag');
 const seriesLeadLagResetButton = document.getElementById('series-leadlag-reset');
 
 let workbook = null;
@@ -47,14 +54,16 @@ let viewSpan = null;
 
 let axisDefaults = {
   y: { min: null, max: null },
-  y1: { min: null, max: null }
+  y1: { min: null, max: null },
+  y2: { min: null, max: null }
 };
 let axisOverrides = {
   y: { min: null, max: null },
-  y1: { min: null, max: null }
+  y1: { min: null, max: null },
+  y2: { min: null, max: null }
 };
-let axisInversions = { y: false, y1: false };
-let seriesLeadLagOffsets = { seriesA: 0, seriesB: 0 };
+let axisInversions = { y: false, y1: false, y2: false };
+let seriesLeadLagOffsets = { seriesA: 0, seriesB: 0, seriesC: 0 };
 
 let windowStartPct = 0;
 let windowSizePct = 100;
@@ -293,6 +302,7 @@ const rebuildShiftedSeriesDatasets = () => {
 
   const seriesAOffset = seriesLeadLagOffsets.seriesA;
   const seriesBOffset = seriesLeadLagOffsets.seriesB;
+  const seriesCOffset = seriesLeadLagOffsets.seriesC;
 
   chartSource.seriesADataset = makeSeriesDataset({
     label: `${chartSource.seriesA.key}${formatLeadLagLabelSuffix(seriesAOffset)}`,
@@ -324,6 +334,24 @@ const rebuildShiftedSeriesDatasets = () => {
           color: SERIES_B_COLOR,
           style: chartSource.seriesB.style,
           order: 3
+        })
+      : null;
+
+  chartSource.seriesCDataset =
+    chartSource.seriesC
+      ? makeSeriesDataset({
+          label: `${chartSource.seriesC.key}${formatLeadLagLabelSuffix(seriesCOffset)}`,
+          seriesKey: chartSource.seriesC.key,
+          axisId: 'y',
+          points: shiftSeriesPointsByDates(
+            chartSource.seriesC.points,
+            seriesCOffset,
+            chartSource.dateIndexLookup,
+            chartSource.datesByIndex
+          ),
+          color: SERIES_C_COLOR,
+          style: chartSource.seriesC.style,
+          order: 2
         })
       : null;
 };
@@ -479,9 +507,11 @@ const formatAxisInputValue = (value) => (Number.isFinite(value) ? String(value) 
 const updateAxisControlsUI = () => {
   const hasChart = Boolean(chart);
   const hasSeriesB = Boolean(chartSource?.seriesB);
+  const hasSeriesC = Boolean(chartSource?.seriesC);
 
   seriesAAxisControls.classList.toggle('is-disabled', !hasChart);
   seriesBAxisControls.classList.toggle('is-disabled', !hasChart || !hasSeriesB);
+  seriesCAxisControls.classList.toggle('is-disabled', !hasChart || !hasSeriesC);
   seriesLeadLagControls.classList.toggle('is-disabled', !hasChart);
 
   seriesAMaxInput.disabled = !hasChart;
@@ -494,8 +524,14 @@ const updateAxisControlsUI = () => {
   seriesBResetButton.disabled = !hasChart || !hasSeriesB;
   seriesBInvertToggle.disabled = !hasChart || !hasSeriesB;
 
+  seriesCMaxInput.disabled = !hasChart || !hasSeriesC;
+  seriesCMinInput.disabled = !hasChart || !hasSeriesC;
+  seriesCResetButton.disabled = !hasChart || !hasSeriesC;
+  seriesCInvertToggle.disabled = !hasChart || !hasSeriesC;
+
   seriesALeadLagInput.disabled = !hasChart;
   seriesBLeadLagInput.disabled = !hasChart || !hasSeriesB;
+  seriesCLeadLagInput.disabled = !hasChart || !hasSeriesC;
   seriesLeadLagResetButton.disabled = !hasChart;
 
   seriesAMaxInput.value = formatAxisInputValue(axisOverrides.y.max);
@@ -503,12 +539,16 @@ const updateAxisControlsUI = () => {
 
   seriesBMaxInput.value = formatAxisInputValue(axisOverrides.y1.max);
   seriesBMinInput.value = formatAxisInputValue(axisOverrides.y1.min);
+  seriesCMaxInput.value = formatAxisInputValue(axisOverrides.y2.max);
+  seriesCMinInput.value = formatAxisInputValue(axisOverrides.y2.min);
 
   seriesAInvertToggle.checked = Boolean(axisInversions.y);
   seriesBInvertToggle.checked = Boolean(axisInversions.y1);
+  seriesCInvertToggle.checked = Boolean(axisInversions.y2);
 
   seriesALeadLagInput.value = String(seriesLeadLagOffsets.seriesA || 0);
   seriesBLeadLagInput.value = String(seriesLeadLagOffsets.seriesB || 0);
+  seriesCLeadLagInput.value = String(seriesLeadLagOffsets.seriesC || 0);
 };
 
 const applyAxisOverrides = () => {
@@ -528,6 +568,18 @@ const applyAxisOverrides = () => {
   scales.y1.reverse = Boolean(axisInversions.y1);
 
   chart.update();
+
+  if (seriesCChart) {
+    const y2Min = axisOverrides.y2.min;
+    const y2Max = axisOverrides.y2.max;
+    seriesCChart.options.scales.y.min = Number.isFinite(y2Min) ? y2Min : axisDefaults.y2.min;
+    seriesCChart.options.scales.y.max = Number.isFinite(y2Max) ? y2Max : axisDefaults.y2.max;
+    seriesCChart.options.scales.y.reverse = Boolean(axisInversions.y2);
+    seriesCChart.options.scales.y1.min = seriesCChart.options.scales.y.min;
+    seriesCChart.options.scales.y1.max = seriesCChart.options.scales.y.max;
+    seriesCChart.options.scales.y1.reverse = Boolean(axisInversions.y2);
+    seriesCChart.update();
+  }
 };
 
 const setAxisOverride = (axisId, bound, value) => {
@@ -557,6 +609,12 @@ const applyLeadLagOffsets = () => {
   rebuildShiftedSeriesDatasets();
   chart.data.datasets = buildVisibleDatasets();
   chart.update();
+
+  if (seriesCChart && chartSource.seriesCDataset) {
+    seriesCChart.data.datasets = [chartSource.seriesCDataset];
+    seriesCChart.update();
+    applyAxisOverrides();
+  }
 };
 
 const clearChart = () => {
@@ -576,10 +634,10 @@ const clearChart = () => {
   fullMaxX = null;
   latestSeriesAMaxX = null;
   viewSpan = null;
-  axisDefaults = { y: { min: null, max: null }, y1: { min: null, max: null } };
-  axisOverrides = { y: { min: null, max: null }, y1: { min: null, max: null } };
-  axisInversions = { y: false, y1: false };
-  seriesLeadLagOffsets = { seriesA: 0, seriesB: 0 };
+  axisDefaults = { y: { min: null, max: null }, y1: { min: null, max: null }, y2: { min: null, max: null } };
+  axisOverrides = { y: { min: null, max: null }, y1: { min: null, max: null }, y2: { min: null, max: null } };
+  axisInversions = { y: false, y1: false, y2: false };
+  seriesLeadLagOffsets = { seriesA: 0, seriesB: 0, seriesC: 0 };
   resetZoomButton.disabled = true;
   setQuickTimeframeButtonsDisabled(true);
   resetTimelineWindow();
@@ -592,11 +650,13 @@ const resetSeriesSelectors = () => {
   seriesCSelect.disabled = true;
   seriesABarToggle.disabled = true;
   seriesBBarToggle.disabled = true;
+  seriesCBarToggle.disabled = true;
   seriesASelect.innerHTML = '<option value="">Choose series A</option>';
   seriesBSelect.innerHTML = '<option value="">None</option>';
   seriesCSelect.innerHTML = '<option value="">None</option>';
   seriesABarToggle.checked = false;
   seriesBBarToggle.checked = true;
+  seriesCBarToggle.checked = false;
 };
 
 const syncSeriesSelectorOptions = () => {
@@ -650,6 +710,7 @@ const buildChart = (rows, columns) => {
     seriesCKey,
     seriesAStyle,
     seriesBStyle,
+    seriesCStyle,
     seriesFormats,
     worksheet,
     headers
@@ -749,11 +810,13 @@ const buildChart = (rows, columns) => {
       seriesCKey && points.some((point) => point.seriesC !== null)
         ? {
             key: seriesCKey,
+            style: seriesCStyle,
             points: points.filter((point) => point.seriesC !== null).map((point) => ({ x: point.x, y: point.seriesC }))
           }
         : null,
     seriesADataset: null,
     seriesBDataset: null,
+    seriesCDataset: null,
     eventDataset:
       eventKey && eventPoints.length
         ? {
@@ -919,26 +982,12 @@ const buildChart = (rows, columns) => {
   preservedMaxX = nextFullMaxX;
   syncBubbleLinks(chart);
 
-  if (chartSource.seriesC) {
+  if (chartSource.seriesC && chartSource.seriesCDataset) {
     seriesCChartContainer.classList.remove('is-hidden');
     seriesCChart = new Chart(seriesCCanvas, {
       type: 'line',
       data: {
-        datasets: [
-          {
-            type: 'line',
-            label: chartSource.seriesC.key,
-            data: chartSource.seriesC.points,
-            seriesKey: chartSource.seriesC.key,
-            yAxisID: 'y',
-            borderColor: SERIES_C_COLOR,
-            backgroundColor: `${SERIES_C_COLOR}33`,
-            fill: false,
-            tension: 0.2,
-            pointRadius: 2,
-            pointHoverRadius: 5
-          }
-        ]
+        datasets: [chartSource.seriesCDataset]
       },
       options: {
         responsive: true,
@@ -960,10 +1009,20 @@ const buildChart = (rows, columns) => {
                 return formatSeriesValue(chartSource.seriesC.key, value);
               }
             }
+          },
+          y1: {
+            position: 'right',
+            grid: { drawOnChartArea: false },
+            title: { display: true, text: chartSource.seriesC.key },
+            ticks: {
+              callback(value) {
+                return formatSeriesValue(chartSource.seriesC.key, value);
+              }
+            }
           }
         },
         plugins: {
-          legend: { position: 'top' },
+          legend: { position: 'bottom' },
           tooltip: {
             callbacks: {
               title(items) {
@@ -999,18 +1058,20 @@ const buildChart = (rows, columns) => {
 
     axisDefaults = {
       y: { min: chart.scales.y.min, max: chart.scales.y.max },
-      y1: { min: chart.scales.y1?.min ?? null, max: chart.scales.y1?.max ?? null }
+      y1: { min: chart.scales.y1?.min ?? null, max: chart.scales.y1?.max ?? null },
+      y2: { min: seriesCChart?.scales?.y?.min ?? null, max: seriesCChart?.scales?.y?.max ?? null }
     };
-    axisOverrides = { y: { min: null, max: null }, y1: { min: null, max: null } };
-    axisInversions = { y: false, y1: false };
+    axisOverrides = { y: { min: null, max: null }, y1: { min: null, max: null }, y2: { min: null, max: null } };
+    axisInversions = { y: false, y1: false, y2: false };
     updateAxisControlsUI();
   }
 
   resetZoomButton.disabled = false;
   setQuickTimeframeButtonsDisabled(false);
   updateStatus(
-    `Rendered ${points.length} points (${seriesAKey}${seriesBKey ? ` + ${seriesBKey}` : ''}) with ${eventPoints.length} events and ${commentPoints.length} comments.`
+    `Rendered ${points.length} points (${seriesAKey}${seriesBKey ? ` + ${seriesBKey}` : ''}${seriesCKey ? ` + ${seriesCKey}` : ''}) with ${eventPoints.length} events and ${commentPoints.length} comments.`
   );
+  applyAxisOverrides();
 };
 
 const populateSeriesSelectors = () => {
@@ -1053,12 +1114,14 @@ const populateSeriesSelectors = () => {
   seriesCSelect.disabled = false;
   seriesABarToggle.disabled = false;
   seriesBBarToggle.disabled = false;
+  seriesCBarToggle.disabled = false;
 
   seriesASelect.value = '';
   seriesBSelect.value = '';
   seriesCSelect.value = '';
   seriesABarToggle.checked = false;
   seriesBBarToggle.checked = true;
+  seriesCBarToggle.checked = false;
   syncSeriesSelectorOptions();
 };
 
@@ -1111,6 +1174,7 @@ const renderSelectedSeries = ({ preserveTimeline = true } = {}) => {
     seriesCKey: seriesCKey || null,
     seriesAStyle: seriesABarToggle.checked ? 'bar' : 'line',
     seriesBStyle: seriesBBarToggle.checked ? 'bar' : 'line',
+    seriesCStyle: seriesCBarToggle.checked ? 'bar' : 'line',
     seriesFormats,
     preserveTimeline: preservedTimelineWindow
   });
@@ -1262,6 +1326,11 @@ seriesBBarToggle.addEventListener('change', () => {
   renderSelectedSeries();
 });
 
+seriesCBarToggle.addEventListener('change', () => {
+  if (!currentSheetContext) return;
+  renderSelectedSeries();
+});
+
 showEventToggle.addEventListener('change', refreshAnnotationDatasets);
 showCommentToggle.addEventListener('change', refreshAnnotationDatasets);
 disableLinksToggle.addEventListener('change', () => {
@@ -1322,6 +1391,16 @@ seriesBMinInput.addEventListener('input', () => {
   setAxisOverride('y1', 'min', readAxisInputValue(seriesBMinInput));
 });
 
+seriesCMaxInput.addEventListener('input', () => {
+  if (!chart || !chartSource?.seriesC) return;
+  setAxisOverride('y2', 'max', readAxisInputValue(seriesCMaxInput));
+});
+
+seriesCMinInput.addEventListener('input', () => {
+  if (!chart || !chartSource?.seriesC) return;
+  setAxisOverride('y2', 'min', readAxisInputValue(seriesCMinInput));
+});
+
 seriesAResetButton.addEventListener('click', () => {
   if (!chart) return;
   resetAxisOverride('y');
@@ -1330,6 +1409,11 @@ seriesAResetButton.addEventListener('click', () => {
 seriesBResetButton.addEventListener('click', () => {
   if (!chart || !chartSource?.seriesB) return;
   resetAxisOverride('y1');
+});
+
+seriesCResetButton.addEventListener('click', () => {
+  if (!chart || !chartSource?.seriesC) return;
+  resetAxisOverride('y2');
 });
 
 seriesAInvertToggle.addEventListener('change', () => {
@@ -1341,6 +1425,12 @@ seriesAInvertToggle.addEventListener('change', () => {
 seriesBInvertToggle.addEventListener('change', () => {
   if (!chart || !chartSource?.seriesB) return;
   axisInversions.y1 = seriesBInvertToggle.checked;
+  applyAxisOverrides();
+});
+
+seriesCInvertToggle.addEventListener('change', () => {
+  if (!chart || !chartSource?.seriesC) return;
+  axisInversions.y2 = seriesCInvertToggle.checked;
   applyAxisOverrides();
 });
 
@@ -1356,9 +1446,15 @@ seriesBLeadLagInput.addEventListener('input', () => {
   applyLeadLagOffsets();
 });
 
+seriesCLeadLagInput.addEventListener('input', () => {
+  if (!chart || !chartSource?.seriesC) return;
+  seriesLeadLagOffsets.seriesC = readLeadLagOffset(seriesCLeadLagInput);
+  applyLeadLagOffsets();
+});
+
 seriesLeadLagResetButton.addEventListener('click', () => {
   if (!chart) return;
-  seriesLeadLagOffsets = { seriesA: 0, seriesB: 0 };
+  seriesLeadLagOffsets = { seriesA: 0, seriesB: 0, seriesC: 0 };
   applyLeadLagOffsets();
   updateAxisControlsUI();
 });

@@ -292,7 +292,7 @@ body.is-timeline-dragging {
 .advanced-grid {
   margin-top: 0.75rem;
   display: grid;
-  grid-template-columns: repeat(3, 15%);
+  grid-template-columns: repeat(4, 15%);
   justify-content: start;
   gap: 0.85rem;
 }
@@ -303,6 +303,7 @@ body.is-timeline-dragging {
   padding: 0.75rem;
   display: grid;
   gap: 0.5rem;
+  min-height: 188px;
 }
 
 .axis-controls h3 {
@@ -360,4 +361,9 @@ body.is-timeline-dragging {
   width: 100%;
   max-width: 62px;
   justify-self: end;
+}
+
+
+#series-leadlag-controls .leadlag-row input {
+  max-width: 56px;
 }

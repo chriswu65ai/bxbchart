@@ -1,3 +1,31 @@
+const PASSWORD_PROMPT = 'What is the password?';
+const REQUIRED_PASSWORD = 'thomas';
+
+const isPasswordAccepted = () => {
+  const answer = window.prompt(PASSWORD_PROMPT);
+  return answer === REQUIRED_PASSWORD;
+};
+
+const lockPage = () => {
+  document.body.innerHTML = '';
+  document.body.style.margin = '0';
+  document.body.style.display = 'grid';
+  document.body.style.placeItems = 'center';
+  document.body.style.minHeight = '100vh';
+  document.body.style.fontFamily = 'Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif';
+
+  const message = document.createElement('p');
+  message.textContent = 'Access denied.';
+  message.style.color = '#991b1b';
+  message.style.fontWeight = '600';
+  document.body.append(message);
+};
+
+if (!isPasswordAccepted()) {
+  lockPage();
+  throw new Error('Unauthorized');
+}
+
 const fileInput = document.getElementById('excel-file');
 const sheetSelect = document.getElementById('sheet-select');
 const seriesASelect = document.getElementById('series-a-select');
@@ -905,7 +933,7 @@ const buildChart = (rows, columns) => {
         x: {
           type: 'time',
           time: { unit: 'month' },
-          title: { display: true, text: dateKey },
+          title: { display: false, text: '' },
           min: nextFullMinX,
           max: nextFullMaxX
         },
@@ -997,7 +1025,7 @@ const buildChart = (rows, columns) => {
           x: {
             type: 'time',
             time: { unit: 'month' },
-            title: { display: true, text: dateKey },
+            title: { display: false, text: '' },
             min: nextFullMinX,
             max: nextFullMaxX
           },
